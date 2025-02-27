@@ -1,15 +1,17 @@
 package com.boot.restdemo;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.annotation.PostConstruct;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,67 +25,78 @@ public class RestDemoApplication {
 
 }
 
+@Component
+class DataLoader{
+    private final CoffeRepository coffeeRepository;
+    public DataLoader(CoffeRepository coffeeRepository) {
+        this.coffeeRepository = coffeeRepository;
+    }
+
+    @PostConstruct
+    public void loadData(){
+        coffeeRepository.saveAll(List.of(
+                new Coffee("Café Cereza"),
+                new Coffee("Café Ganador"),
+                new Coffee("Café Lareño"),
+                new Coffee("Café Três Pontas")
+        ));
+
+    }
+}
+
 @RestController
 @RequestMapping("/coffees")
 class RestApiDemoController {
-    private List<Coffee> coffees = new ArrayList<>();
+    private final CoffeRepository coffeRepository;
 
-    public RestApiDemoController() {
-        coffees.addAll(List.of(
-                new Coffee("Cafe Cereza"),
-                new Coffee("Cafe Ganador"),
-                new Coffee("Vafe Lareno"),
-                new Coffee("Cafe Tres Pontas")
-        ));
+    public RestApiDemoController(CoffeRepository coffeRepository) {
+        this.coffeRepository = coffeRepository;
+
     }
 
     @GetMapping
     Iterable<Coffee> getCoffees() {
-        return coffees;
+        return coffeRepository.findAll();
     }
 
     @GetMapping("/{id}")
     Optional<Coffee> getCoffeeById(@PathVariable String id) {
-        for (Coffee coffee : coffees) {
-            if (coffee.getId().equals(id)) {
-                return Optional.of(coffee);
-            }
-        }
-        return Optional.empty();
+        return coffeRepository.findById(id);
     }
 
     @PostMapping
     Coffee postCoffee(@RequestBody Coffee coffee) {
-        coffees.add(coffee);
-        return coffee;
+        return coffeRepository.save(coffee);
     }
 
     @PutMapping("/{id}")
     ResponseEntity<Coffee> putCoffee(@PathVariable String id, @RequestBody Coffee coffee) {
-        int coffeeIndex = -1;
-        for (Coffee c : coffees) {
-            if (c.getId().equals(id)) {
-                coffeeIndex = coffees.indexOf(c);
-                coffees.set(coffeeIndex, coffee);
-            }
-        }
-        return (coffeeIndex == -1) ?
-                new ResponseEntity<>(postCoffee(coffee), HttpStatus.CREATED) :
-                new ResponseEntity<>(coffee, HttpStatus.OK);
+        return (!coffeRepository.existsById(id))
+                ? new ResponseEntity<>(coffeRepository.save(coffee), HttpStatus.CREATED)
+                : new ResponseEntity<>(coffeRepository.save(coffee), HttpStatus.OK);
     }
     @DeleteMapping("/{id}")
     void deleteCoffee(@PathVariable String id) {
-        coffees.removeIf(c -> c.getId().equals(id));
+        coffeRepository.deleteById(id);
     }
 
 }
 
+interface CoffeRepository extends JpaRepository<Coffee, String> {}
+
+@Entity
 class Coffee {
-    private final String id;
+    @Id
+    @Column(name = "id")
+    private String id;
+    @Column(name = "name")
     private String name;
 
-    @JsonCreator
-    public Coffee(@JsonProperty("name") String name, @JsonProperty("id") String id) {
+
+    public Coffee() {}
+
+//    @JsonCreator
+    public Coffee(String id, String name) {
         this.name = name;
         this.id = id;
     }
